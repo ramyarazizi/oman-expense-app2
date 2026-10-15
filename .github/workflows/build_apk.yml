@@ -1,0 +1,100 @@
+name: Build All 3 Versions (Android APK + Windows EXE + iPhone IPA)
+
+on:
+  push:
+    branches: [ "main", "master" ]
+  workflow_dispatch:
+
+jobs:
+  build-android-apk:
+    name: 1. Build Android (.apk)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Setup Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'zulu'
+          java-version: '17'
+
+      - name: Setup Flutter SDK
+        uses: subosito/flutter-action@v2
+        with:
+          channel: 'stable'
+
+      - name: Create Flutter Project, Enable Internet & Build Release APK
+        run: |
+          flutter create --project-name oman_expense_app --org om.ramyar.expenses app_project
+          if [ -f "oman_petty_cash_app.dart" ]; then
+            cp oman_petty_cash_app.dart app_project/lib/main.dart
+          fi
+          sed -i 's/<application/<uses-permission android:name="android.permission.INTERNET"\/>\n    <application/' app_project/android/app/src/main/AndroidManifest.xml
+          cd app_project
+          flutter build apk --release
+
+      - name: Upload Android APK Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: 1-Oman-Expense-Android-APK
+          path: app_project/build/app/outputs/flutter-apk/app-release.apk
+
+  build-windows-exe:
+    name: 2. Build Windows Desktop (.exe for Win 8/10/11)
+    runs-on: windows-latest
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Setup Flutter SDK on Windows
+        uses: subosito/flutter-action@v2
+        with:
+          channel: 'stable'
+
+      - name: Enable Windows Desktop & Build Release EXE
+        shell: bash
+        run: |
+          flutter config --enable-windows-desktop
+          flutter create --platforms=windows --project-name oman_expense_app app_project
+          if [ -f "oman_petty_cash_app.dart" ]; then
+            cp oman_petty_cash_app.dart app_project/lib/main.dart
+          fi
+          cd app_project
+          flutter build windows --release
+
+      - name: Upload Windows EXE Package
+        uses: actions/upload-artifact@v4
+        with:
+          name: 2-Oman-Expense-Windows-EXE
+          path: app_project/build/windows/x64/runner/Release/
+
+  build-ios-ipa:
+    name: 3. Build iPhone iOS (.ipa)
+    runs-on: macos-latest
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Setup Flutter SDK on macOS
+        uses: subosito/flutter-action@v2
+        with:
+          channel: 'stable'
+
+      - name: Create iOS Project & Build Release IPA
+        run: |
+          flutter create --platforms=ios --project-name oman_expense_app --org om.ramyar.expenses app_project
+          if [ -f "oman_petty_cash_app.dart" ]; then
+            cp oman_petty_cash_app.dart app_project/lib/main.dart
+          fi
+          cd app_project
+          flutter build ios --release --no-codesign
+          mkdir -p Payload
+          cp -r build/ios/iphoneos/Runner.app Payload/
+          zip -r Oman-Expense-iOS.ipa Payload
+
+      - name: Upload iOS IPA Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: 3-Oman-Expense-iOS-IPA
+          path: app_project/Oman-Expense-iOS.ipa
